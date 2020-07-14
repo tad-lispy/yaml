@@ -1,4 +1,4 @@
-module Main exposing (..)
+module TestParser exposing (suite)
 
 import Expect
 import Test
@@ -79,6 +79,10 @@ suite =
         \_ -> 
           expectValue "[]" <|
             Ast.List_ []
+    , Test.test "a list with an empty string" <|
+        \_ ->
+          expectValue "[ '' ]" <|
+            Ast.List_ [ Ast.String_ "" ]
     , Test.test "an inline list with ints and no spaces" <|
         \_ -> 
           expectValue "[0,1,2]" <|

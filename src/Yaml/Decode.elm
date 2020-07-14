@@ -155,7 +155,7 @@ list decoder =
 {-| Decode a YAML object, requiring a particular field.
 
 The object can have other fields. Lots of them! The only thing this decoder 
-cares about is if x is present and that the value there is an Int.
+cares about is if x is present and that the value there is an `a`.
 
 Check out [map2](#map2) to see how to decode multiple fields!
 
