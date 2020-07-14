@@ -247,7 +247,7 @@ suite =
             ccc: ccc
             """ <|
             Ast.Record_ (Dict.fromList [ ("aaa", Ast.String_ "aaa"), ("bbb", Ast.List_ [ Ast.String_ "aaa", Ast.String_ "bbb", Ast.String_ "ccc" ]), ("ccc", Ast.String_ "ccc") ])
-    , Test.test "a record with comments" <|
+    , Test.test "a record with strings comments" <|
         \_ -> 
           expectValue 
             """
@@ -256,7 +256,7 @@ suite =
             ccc: ccc   # hey
             ddd: ddd  # hey
             """ <|
-            Ast.Record_ (Dict.fromList [ ("aaa", Ast.String_ "aaa# hey"), ("bbb", Ast.String_ "bbb"), ("ccc", Ast.String_ "ccc"), ("ddd", Ast.String_ "ddd") ])
+            Ast.Record_ (Dict.fromList [ ("aaa", Ast.String_ "aaa"), ("bbb", Ast.String_ "bbb"), ("ccc", Ast.String_ "ccc"), ("ddd", Ast.String_ "ddd") ])
     , Test.test "a record with mixed values" <|
         \_ ->
           expectValue
@@ -275,7 +275,7 @@ suite =
             ccc:   3  #   Another comment
             ddd:    4.5  #
             """ <|
-            Ast.Record_ (Dict.fromList [ ("aaa", Ast.String_ "1# First"), ("bbb", Ast.Float_ 2.0), ("ccc", Ast.Int_ 3), ("ddd", Ast.Float_ 4.5) ])
+            Ast.Record_ (Dict.fromList [ ("aaa", Ast.Int_ 1), ("bbb", Ast.Float_ 2.0), ("ccc", Ast.Int_ 3), ("ddd", Ast.Float_ 4.5) ])
     , Test.test "a record on a single line" <|
         \_ ->
           expectValue
@@ -291,6 +291,14 @@ suite =
           expectValue
             ("aaa: " ++ String.fromInt x) <|
             Ast.Record_ (Dict.singleton "aaa" <| Ast.Int_ x)
+    , Test.test "a # character in a quoted string" <|
+        \_ ->
+          expectValue
+            """
+            aaa: '# a string'
+            bbb:# a comment
+            """ <|
+            Ast.Record_ (Dict.fromList [ ("aaa", Ast.String_ "# a string"), ("bbb", Ast.Null_) ])
     ]
 
 

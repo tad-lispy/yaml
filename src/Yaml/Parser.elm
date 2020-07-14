@@ -227,7 +227,7 @@ recordOrString indent indent_ =
 
     removeComment string =
       string
-        |> String.split " #"
+        |> String.split "#"
         |> List.head
         |> Maybe.withDefault ""
   in
