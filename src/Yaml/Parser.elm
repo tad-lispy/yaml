@@ -212,7 +212,9 @@ recordOrString indent indent_ =
 
     withString string =
       P.oneOf
-        [ property string
+        [ P.succeed (Ast.fromString string)
+            |. P.end
+        , property string
         , P.succeed (addRemaining string)
             |= if indent == 0 then U.remaining else U.multiline indent 
         ]
