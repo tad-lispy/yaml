@@ -107,7 +107,7 @@ suite =
         \_ -> 
           expectValue """[ aaa,# A comment
            bbb, # a dumb comment
-           ccc   # Another comment
+           ccc
            ]""" <|
             Ast.List_ [ Ast.String_ "aaa", Ast.String_ "bbb", Ast.String_ "ccc" ]
     , Test.test "an inline list with strings, with new lines, and multi-line strings" <|
@@ -256,7 +256,7 @@ suite =
             ccc: ccc   # hey
             ddd: ddd  # hey
             """ <|
-            Ast.Record_ (Dict.fromList [ ("aaa", Ast.String_ "aaa"), ("bbb", Ast.String_ "bbb"), ("ccc", Ast.String_ "ccc"), ("ddd", Ast.String_ "ddd") ])
+            Ast.Record_ (Dict.fromList [ ("aaa", Ast.String_ "aaa# hey"), ("bbb", Ast.String_ "bbb"), ("ccc", Ast.String_ "ccc"), ("ddd", Ast.String_ "ddd") ])
     , Test.test "a record with mixed values" <|
         \_ ->
           expectValue
@@ -266,6 +266,16 @@ suite =
             ccc: 1.0
             """ <|
             Ast.Record_ (Dict.fromList [ ("aaa", Ast.Int_ 1), ("bbb", Ast.String_ "bbb"), ("ccc", Ast.Float_ 1.0) ])
+    , Test.test "a record with numbers and comments" <|
+        \_ ->
+          expectValue
+            """
+            aaa:1# First
+            bbb:  2.0 # A comment
+            ccc:   3  #   Another comment
+            ddd:    4.5  #
+            """ <|
+            Ast.Record_ (Dict.fromList [ ("aaa", Ast.String_ "1# First"), ("bbb", Ast.Float_ 2.0), ("ccc", Ast.Int_ 3), ("ddd", Ast.Float_ 4.5) ])
     , Test.test "a record on a single line" <|
         \_ ->
           expectValue
