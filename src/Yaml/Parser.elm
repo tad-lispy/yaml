@@ -212,7 +212,9 @@ recordOrString indent indent_ =
 
     withString string =
       P.oneOf
-        [ property string
+        [ P.succeed (Ast.fromString string)
+            |. P.end
+        , property string
         , P.succeed (addRemaining string)
             |= if indent == 0 then U.remaining else U.multiline indent 
         ]
@@ -227,7 +229,7 @@ recordOrString indent indent_ =
 
     removeComment string =
       string
-        |> String.split " #"
+        |> String.split "#"
         |> List.head
         |> Maybe.withDefault ""
   in

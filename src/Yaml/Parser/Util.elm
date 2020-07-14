@@ -158,9 +158,7 @@ whitespace =
 {-| -}
 comment : P.Parser ()
 comment =
-  P.succeed ()
-    |. P.symbol " #"
-    |. P.chompUntilEndOr "\n"
+  P.lineComment "#"
 
 
 
