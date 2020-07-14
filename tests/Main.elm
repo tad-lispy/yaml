@@ -2,6 +2,7 @@ module Main exposing (..)
 
 import Expect
 import Test
+import Fuzz exposing (int, float)
 import Yaml.Parser as Parser
 import Yaml.Parser.Ast as Ast
 import Dict
@@ -30,14 +31,14 @@ suite =
         \_ -> 
           expectValue "" <|
             Ast.Null_
-    , Test.test "an int" <|
-        \_ -> 
-          expectValue "0" <| 
-            Ast.Int_ 0
-    , Test.test "a float" <|
-        \_ -> 
-          expectValue "0.5" <| 
-            Ast.Float_ 0.5
+    , Test.fuzz int "an int" <|
+        \x ->
+          expectValue (String.fromInt x) <|
+            Ast.Int_ x
+    , Test.fuzz float "a float" <|
+        \x ->
+          expectValue (if x == 0.0 then "0.0" else String.fromFloat x) <|
+            Ast.Float_ x
     , Test.test "a single-quoted string" <|
         \_ -> -- TODO is this right?
           expectValue """'hey 
@@ -86,22 +87,27 @@ suite =
         \_ -> 
           expectValue "[ 0, 1, 2 ]" <|
             Ast.List_ [ Ast.Int_ 0, Ast.Int_ 1, Ast.Int_ 2 ]
+    , Test.test "an inline list with strings and no spaces" <|
+        \_ ->
+          expectValue "[aaa,bbb,ccc]" <|
+            Ast.List_ [ Ast.String_ "aaa", Ast.String_ "bbb", Ast.String_ "ccc" ]
     , Test.test "an inline list with strings and with spaces" <|
         \_ -> 
           expectValue "[ aaa, bbb, ccc ]" <|
             Ast.List_ [ Ast.String_ "aaa", Ast.String_ "bbb", Ast.String_ "ccc" ]
     , Test.test "an inline list with strings and with new lines" <|
         \_ -> 
-          expectValue """[ aaa,
+          expectValue """[
+           aaa,
            bbb, 
            ccc 
            ]""" <|
             Ast.List_ [ Ast.String_ "aaa", Ast.String_ "bbb", Ast.String_ "ccc" ]
     , Test.test "an inline list with strings and with new lines and comments" <|
         \_ -> 
-          expectValue """[ aaa,
+          expectValue """[ aaa,# A comment
            bbb, # a dumb comment
-           ccc 
+           ccc   # Another comment
            ]""" <|
             Ast.List_ [ Ast.String_ "aaa", Ast.String_ "bbb", Ast.String_ "ccc" ]
     , Test.test "an inline list with strings, with new lines, and multi-line strings" <|
@@ -114,7 +120,7 @@ suite =
             Ast.List_ [ Ast.String_ "aaa", Ast.String_ "bbb", Ast.String_ "ccc ccc\n           ccc" ]
     , Test.test "an inline list with an inline list inside" <|
         \_ -> 
-          expectValue "[ aaa, [bbb, aaa, ccc], ccc ]" <|
+          expectValue "[ aaa, [ bbb, aaa, ccc ], ccc ]" <|
             Ast.List_ [ Ast.String_ "aaa", Ast.List_ [ Ast.String_ "bbb", Ast.String_ "aaa", Ast.String_ "ccc" ], Ast.String_ "ccc" ]
     , Test.test "an inline list with a record inside" <|
         \_ -> 
@@ -245,11 +251,36 @@ suite =
         \_ -> 
           expectValue 
             """
-            aaa: aaa # hey
+            aaa: aaa# hey
             bbb: bbb # hey
-            ccc: ccc # hey
+            ccc: ccc   # hey
+            ddd: ddd  # hey
             """ <|
-            Ast.Record_ (Dict.fromList [ ("aaa", Ast.String_ "aaa"), ("bbb", Ast.String_ "bbb"), ("ccc", Ast.String_ "ccc") ])
+            Ast.Record_ (Dict.fromList [ ("aaa", Ast.String_ "aaa"), ("bbb", Ast.String_ "bbb"), ("ccc", Ast.String_ "ccc"), ("ddd", Ast.String_ "ddd") ])
+    , Test.test "a record with mixed values" <|
+        \_ ->
+          expectValue
+            """
+            aaa: 1
+            bbb: bbb
+            ccc: 1.0
+            """ <|
+            Ast.Record_ (Dict.fromList [ ("aaa", Ast.Int_ 1), ("bbb", Ast.String_ "bbb"), ("ccc", Ast.Float_ 1.0) ])
+    , Test.test "a record on a single line" <|
+        \_ ->
+          expectValue
+            "aaa: aaa" <|
+            Ast.Record_ (Dict.singleton "aaa" <| Ast.String_ "aaa")
+    , Test.test "a record on a single line with a quoted value" <|
+        \_ ->
+          expectValue
+            "aaa:'aaa'" <|
+            Ast.Record_ (Dict.singleton "aaa" <| Ast.String_ "aaa")
+    , Test.fuzz int "a record on a single line with an integer value" <|
+        \x ->
+          expectValue
+            ("aaa: " ++ String.fromInt x) <|
+            Ast.Record_ (Dict.singleton "aaa" <| Ast.Int_ x)
     ]
 
 
