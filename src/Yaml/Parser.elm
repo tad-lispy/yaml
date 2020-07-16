@@ -6,6 +6,7 @@ import Yaml.Parser.Util as U
 import Yaml.Parser.Document
 import Yaml.Parser.String
 import Dict
+import Regex exposing (Regex)
 
 
 {-| -}
@@ -19,6 +20,52 @@ toString =
   Ast.toString
 
 
+-- ERROR REPORTING
+
+deadEndsToString : List P.DeadEnd -> String
+deadEndsToString deadends =
+    String.join "\n"
+        <| List.map deadEndToString deadends
+
+deadEndToString : P.DeadEnd -> String
+deadEndToString deadend =
+    "Line " ++ String.fromInt deadend.row
+        ++ ", column " ++ String.fromInt deadend.col
+        ++ ": " ++ problemToString deadend.problem
+
+problemToString : P.Problem -> String
+problemToString p =
+    case p of
+        P.Expecting msg ->
+            "Expected " ++ msg
+        P.ExpectingInt ->
+            "Expected an integer"
+        P.ExpectingHex ->
+            "Expected a hexadecimal value"
+        P.ExpectingOctal ->
+            "Expected an octal value"
+        P.ExpectingBinary ->
+            "Expected a binary value"
+        P.ExpectingFloat ->
+            "Expected a float"
+        P.ExpectingNumber ->
+            "Expected a number"
+        P.ExpectingVariable ->
+            "Expected a variable"
+        P.ExpectingSymbol name ->
+            "Expected symbol '" ++ name ++ "'"
+        P.ExpectingKeyword name ->
+            "Expected keyword '" ++ name ++ "'"
+        P.ExpectingEnd ->
+            "Expected end of input"
+        P.UnexpectedChar ->
+            "Encountered an unexpected character"
+        P.Problem msg ->
+            "Problem: " ++ msg
+        P.BadRepeat ->
+            "Bad repeat"
+
+
 
 -- PARSER
 
@@ -26,8 +73,7 @@ toString =
 {-| -}
 fromString : String -> Result String Ast.Value
 fromString =
-  P.run parser >> Result.mapError P.deadEndsToString
-
+  P.run parser >> Result.mapError deadEndsToString
 
 {-| -}
 parser : P.Parser Ast.Value
@@ -161,6 +207,7 @@ listInlineValue =
   P.oneOf
     [ listInline
     , recordInline
+    , quotedString 0
     , listInlineString
     ]
 
@@ -170,7 +217,7 @@ listInlineString =
   P.succeed ()
     |. P.chompWhile (U.neither U.isComma U.isListEnd)
     |> P.getChompedString
-    |> P.map Ast.fromString
+    |> P.map (Ast.fromString << (String.replace "\\" "\\\\"))
 
 
 listInlineNext : List Ast.Value -> Ast.Value -> P.Parser (P.Step (List Ast.Value) (List Ast.Value))
@@ -204,28 +251,17 @@ listInlineOnDone elements element =
 recordOrString : Int -> Int -> P.Parser Ast.Value
 recordOrString indent indent_ =
   let
-    withQuote qoute =
-      P.oneOf
-        [ property qoute
-        , P.succeed (Ast.String_ qoute)
-        ]
-
     withString string =
       P.oneOf
         [ P.succeed (Ast.fromString string)
             |. P.end
-        , property string
+        , recordProperty indent_ string
         , P.succeed (addRemaining string)
             |= if indent == 0 then U.remaining else U.multiline indent 
         ]
 
-    property name =
-      P.succeed (record indent_ name)
-        |. P.chompIf U.isColon 
-        |> P.andThen identity
-
     addRemaining string remaining =
-      Ast.fromString (removeComment string ++ remaining)
+      Ast.fromString <| U.postProcessString (removeComment string ++ remaining)
 
     removeComment string =
       string
@@ -234,19 +270,37 @@ recordOrString indent indent_ =
         |> Maybe.withDefault ""
   in
   P.oneOf
-    [ P.succeed (Ast.String_ ":")
-        |. P.chompIf U.isColon
-    , P.succeed identity
-        |= P.oneOf [ U.singleQuotes, U.doubleQuotes ]
-        |. U.spaces
-        |> P.andThen withQuote
+    [ quotedString indent_
     , P.succeed identity
         |. P.chompIf (U.neither U.isColon U.isNewLine)
         |. P.chompWhile (U.neither U.isColon U.isNewLine)
         |> P.getChompedString
         |> P.andThen withString
+    , P.succeed identity
+        |. P.chompWhile U.isColon
+        |> P.getChompedString
+        |> P.andThen withString
     ]
 
+quotedString : Int -> P.Parser Ast.Value
+quotedString indent =
+    let
+        withQuote quote =
+            P.oneOf
+                [ recordProperty indent quote
+                , P.succeed (Ast.String_ <| U.postProcessString quote)
+                ]
+    in
+        P.succeed identity
+            |= P.oneOf [ U.singleQuotes, U.doubleQuotes ]
+            |. U.spaces
+            |> P.andThen withQuote
+
+recordProperty : Int -> String -> P.Parser Ast.Value
+recordProperty indent name =
+    P.succeed (record indent name)
+        |. P.chompIf U.isColon
+        |> P.andThen identity
 
 record : Int -> String -> P.Parser Ast.Value
 record indent property =

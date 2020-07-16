@@ -91,6 +91,7 @@ string =
   Decoder <| \v ->
     case v of
       Ast.String_ string_ -> Ok string_
+      Ast.Null_ -> Ok ""
       _ -> Err (Decoding "Expected string")
 
 
@@ -121,6 +122,7 @@ float =
   Decoder <| \v ->
     case v of
       Ast.Float_ float_ -> Ok float_
+      Ast.Int_ int_ -> Ok (toFloat int_)
       _ -> Err (Decoding "Expected float")
 
 {-| Decode a null value.
@@ -155,7 +157,7 @@ list decoder =
 {-| Decode a YAML object, requiring a particular field.
 
 The object can have other fields. Lots of them! The only thing this decoder 
-cares about is if x is present and that the value there is an Int.
+cares about is if x is present and that the value there is an `a`.
 
 Check out [map2](#map2) to see how to decode multiple fields!
 

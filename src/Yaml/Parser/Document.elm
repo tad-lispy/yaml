@@ -1,7 +1,7 @@
 module Yaml.Parser.Document exposing (begins, ends)
 
 
-import Parser as P exposing ((|=), (|.))
+import Parser as P exposing ((|.))
 import Yaml.Parser.Util as U
 
 
