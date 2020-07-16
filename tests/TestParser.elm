@@ -44,13 +44,22 @@ suite =
           expectValue """'hey 
           i am a \n
           parser'""" <| 
-            Ast.String_ "hey \n          i am a \n\n          parser"
+            Ast.String_ "hey i am a\nparser"
+    , Test.test "a single quoted string with no closing quote" <|
+        \_ ->
+          expectErr "'hello"
     , Test.test "a double-quoted string" <|
         \_ -> 
           expectValue """"hey 
           i am a 
           parser" """ <| 
-            Ast.String_ "hey \n          i am a \n          parser"
+            Ast.String_ "hey i am a parser"
+    , Test.test "a double-quoted string with no closing quote" <|
+        \_ ->
+          expectErr "\"hello"
+    , Test.test "a string containing a colon" <|
+        \_ ->
+          expectValue ":!" <| Ast.String_ ":!"
     , Test.test "a single-line string" <|
         \_ -> 
           expectValue "hey i am a parser" <| 
@@ -62,7 +71,7 @@ suite =
             how does one teach curiousity?
             if you have the answers, call me
             """ <| 
-            Ast.String_ "how does one teach self-respect?\n            how does one teach curiousity?\n            if you have the answers, call me"
+            Ast.String_ "how does one teach self-respect? how does one teach curiousity? if you have the answers, call me"
     , Test.test "a multi-line string with three dot ending" <|
         \_ -> 
           expectValue
@@ -74,7 +83,7 @@ suite =
 
 
             """ <| 
-            Ast.String_ "how does one teach self-respect?\n            how does one teach curiousity?\n            if you have the answers, call me"
+            Ast.String_ "how does one teach self-respect? how does one teach curiousity? if you have the answers, call me"
     , Test.test "a empty inline list" <|
         \_ -> 
           expectValue "[]" <|
@@ -83,6 +92,9 @@ suite =
         \_ ->
           expectValue "[ '' ]" <|
             Ast.List_ [ Ast.String_ "" ]
+    , Test.test "an inline list with no closing ]" <|
+        \_ ->
+          expectErr "["
     , Test.test "an inline list with ints and no spaces" <|
         \_ -> 
           expectValue "[0,1,2]" <|
@@ -134,6 +146,18 @@ suite =
         \_ -> 
           expectValue "{bbb: bbb, aaa: aaa, ccc: ccc}" <|
             Ast.Record_ (Dict.fromList [ ("bbb", Ast.String_ "bbb"), ("aaa", Ast.String_ "aaa"), ("ccc", Ast.String_ "ccc") ])
+    , Test.test "empty inline record" <|
+        \_ ->
+          expectValue "{}" <| Ast.Record_ Dict.empty
+    , Test.test "inline record without closing }" <|
+        \_ ->
+          expectErr "{"
+    , Test.test "empty inline record with whitespace" <|
+        \_ ->
+          expectValue "  {    } " <| Ast.Record_ Dict.empty
+    , Test.test "a short inline record" <|
+        \_ ->
+          expectValue "{a: 1}" <| Ast.Record_ (Dict.singleton "a" (Ast.Int_ 1))
     , Test.test "an inline record with weird spacing" <|
         \_ -> 
           expectValue 
@@ -175,7 +199,7 @@ suite =
            bbb
           - ccc
           """ <|
-            Ast.List_ [ Ast.Null_, Ast.String_ "bbb\nbbb bbb\nbbb", Ast.String_ "ccc" ]
+            Ast.List_ [ Ast.Null_, Ast.String_ "bbb bbb bbb bbb", Ast.String_ "ccc" ]
     , Test.test "a list with a list inside" <|
       \_ -> 
         expectValue """
@@ -197,6 +221,20 @@ suite =
           - ccc
           """ <|
           Ast.List_ [ Ast.String_ "aaa", Ast.List_ [ Ast.String_ "aaa", Ast.String_ "bbb", Ast.String_ "ccc" ], Ast.String_ "ccc" ]
+    , Test.test "a list with smaller trailing indentation" <|
+        \_ ->
+          expectValue """
+            - aaa
+            - bbb
+      """ <|
+          Ast.List_ [ Ast.String_ "aaa", Ast.String_ "bbb" ]
+    , Test.test "a list with larger trailing indentation" <|
+        \_ ->
+          expectValue """
+ - aaa
+ - bbb
+    """ <|
+          Ast.List_ [ Ast.String_ "aaa", Ast.String_ "bbb" ]
     , Test.test "a record" <|
       \_ -> 
         expectValue 
@@ -303,6 +341,10 @@ suite =
             bbb:# a comment
             """ <|
             Ast.Record_ (Dict.fromList [ ("aaa", Ast.String_ "# a string"), ("bbb", Ast.Null_) ])
+    , Test.test "trailing spaces after record values" <|
+        \_ ->
+          expectValue "  a: 1    \n  b: 2     " <|
+            Ast.Record_ (Dict.fromList [("a",Ast.Int_ 1), ("b", Ast.Int_ 2)])
     ]
 
 
@@ -312,5 +354,8 @@ expectValue subject expected =
     |> Expect.equal (Ok expected)
  
  
- 
+expectErr : String -> Expect.Expectation
+expectErr subject =
+    Parser.fromString subject
+        |> Expect.err
  

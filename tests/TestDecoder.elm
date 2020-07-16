@@ -7,6 +7,58 @@ import Test
 import Yaml.Decode as Yaml
 
 
+stringToFloat : Float -> String
+stringToFloat f =
+    let
+        str =
+            String.fromFloat f
+    in
+    case String.length str of
+        1 ->
+            str ++ ".0"
+
+        _ ->
+            str
+
+
+sanitiseString : String -> String
+sanitiseString s =
+    let
+        replaceChar : Char -> Char
+        replaceChar c =
+            case c of
+                '[' ->
+                    ' '
+
+                '{' ->
+                    ' '
+
+                '\'' ->
+                    ' '
+
+                '"' ->
+                    ' '
+
+                '#' ->
+                    ' '
+
+                ':' ->
+                    ' '
+
+                '-' ->
+                    ' '
+
+                _ ->
+                    case String.toInt <| String.fromChar c of
+                        Just _ ->
+                            ' '
+
+                        _ ->
+                            c
+    in
+    String.map replaceChar s
+
+
 suite : Test.Test
 suite =
     Test.describe "Decoding"
@@ -23,6 +75,8 @@ suite =
                 \_ -> given "0" Yaml.string |> expectFail "Expected string"
             , Test.test "unquoted bool" <|
                 \_ -> given "true" Yaml.string |> expectFail "Expected string"
+            , Test.fuzz (Fuzz.map sanitiseString string) "random string" <|
+                \s -> given s Yaml.string |> expectEqual (String.trim s)
             ]
         , Test.describe "boolean values"
             [ Test.test "boolean true" <|
@@ -55,15 +109,7 @@ suite =
                 \_ -> given "" Yaml.int |> expectFail "Expected int"
             , Test.fuzz float "floats" <|
                 \x ->
-                    let
-                        strFloat =
-                            if x == 0.0 then
-                                "0.0"
-
-                            else
-                                String.fromFloat x
-                    in
-                    given strFloat Yaml.float |> expectEqual x
+                    given (stringToFloat x) Yaml.float |> expectEqual x
             , Test.test "integer as float" <|
                 \_ -> given "0" Yaml.float |> expectFail "Expected float"
             , Test.test "rubbish as float" <|
@@ -89,7 +135,7 @@ suite =
             , Test.test "nullable float" <|
                 \_ -> given "" (Yaml.nullable Yaml.float) |> expectEqual Maybe.Nothing
             ]
-        , Test.describe "fields and nesting"
+        , Test.describe "object primitives"
             [ Test.test "access first existing field" <|
                 \_ -> given "hello: 5\nworld:6" (Yaml.field "hello" Yaml.int) |> expectEqual 5
             , Test.test "access second existing field" <|
@@ -103,6 +149,40 @@ suite =
                     given "hello:\n  world: 2"
                         (Yaml.at [ "hello", "world", "foo" ] Yaml.int)
                         |> expectFail "Expected record"
+            , Test.test "try 2 fields where the first exists" <|
+                \_ ->
+                    given "  aaa: 0"
+                        (Yaml.or (Yaml.field "aaa" Yaml.int) (Yaml.field "bbb" Yaml.int))
+                        |> expectEqual 0
+            , Test.test "try 2 fields where the second exists" <|
+                \_ ->
+                    given "zzz: 2\nbbb: 0"
+                        (Yaml.or (Yaml.field "aaa" Yaml.int) (Yaml.field "bbb" Yaml.int))
+                        |> expectEqual 0
+            , Test.test "try 2 fields where both exist" <|
+                \_ ->
+                    given "  aaa: 0\n  bbb: 1  "
+                        (Yaml.or (Yaml.field "aaa" Yaml.int) (Yaml.field "bbb" Yaml.int))
+                        |> expectEqual 0
+            , Test.test "try 2 fields where neither exist" <|
+                \_ ->
+                    given "  aaa: 1\n  bbb: 2  \n"
+                        (Yaml.or (Yaml.field "ddd" Yaml.int) (Yaml.field "eee" Yaml.int))
+                        |> expectFail "Expected property: eee"
+            , Test.test "try one of several decoders" <|
+                \_ ->
+                    given ""
+                        (Yaml.oneOf
+                            [ Yaml.succeed "a", Yaml.succeed "b", Yaml.succeed "c" ]
+                        )
+                        |> expectEqual "a"
+            , Test.test "try one of several decoders, all of which fail" <|
+                \_ ->
+                    given "hello"
+                        (Yaml.oneOf
+                            [ Yaml.fail "no", Yaml.fail "nope", Yaml.fail "no way" ]
+                        )
+                        |> expectFail "Empty"
             ]
         , Test.describe "lists"
             [ Test.test "empty list" <|
@@ -146,6 +226,90 @@ suite =
                                 ++ "]"
                     in
                     given strList (Yaml.list Yaml.bool) |> expectEqual xs
+            , Test.test "multiline list" <|
+                \_ ->
+                    let
+                        strList =
+                            """
+                            - hello
+                            - world
+                            - foo
+                            - bar
+                            """
+                    in
+                    given strList (Yaml.list Yaml.string)
+                        |> expectEqual [ "hello", "world", "foo", "bar" ]
+            ]
+        , Test.describe "dictionaries"
+            [ Test.test "inline record" <|
+                \_ ->
+                    given "{a: 1}" (Yaml.dict Yaml.int)
+                        |> expectEqual (Dict.singleton "a" 1)
+            , Test.test "inline record with multiple values" <|
+                \_ ->
+                    given "{aaa: hello, bbb: world}" (Yaml.dict Yaml.string)
+                        |> expectEqual (Dict.fromList [ ( "aaa", "hello" ), ( "bbb", "world" ) ])
+            , Test.test "record" <|
+                \_ ->
+                    given "---\naaa: 1\nbbb: 2" (Yaml.dict Yaml.int)
+                        |> expectEqual (Dict.fromList [ ( "aaa", 1 ), ( "bbb", 2 ) ])
+            , Test.test "record on a single line" <|
+                \_ ->
+                    given "aaa: bbb" (Yaml.dict Yaml.string)
+                        |> expectEqual (Dict.singleton "aaa" "bbb")
+            , Test.test "record with sub-record" <|
+                \_ ->
+                    given "\nparent:\n  childA: 1\n  childB: 2\n"
+                        (Yaml.dict <| Yaml.dict Yaml.int)
+                        |> expectEqual
+                            (Dict.singleton "parent"
+                                (Dict.fromList [ ( "childA", 1 ), ( "childB", 2 ) ])
+                            )
+            , Test.test "record with sub-record of inline list" <|
+                \_ ->
+                    given "parent:\n  childA: [1, 2, 3]\n  childB: - 4\n          - 5\n"
+                        (Yaml.dict <| Yaml.dict (Yaml.list Yaml.int))
+                        |> expectEqual
+                            (Dict.singleton "parent"
+                                (Dict.fromList
+                                    [ ( "childA", [ 1, 2, 3 ] ), ( "childB", [ 4, 5 ] ) ]
+                                )
+                            )
+            , Test.test "record of list with bad indentation" <|
+                \_ ->
+                    given "parent:\n  - aaa\n   - bbb\n"
+                        (Yaml.dict <| Yaml.list Yaml.string)
+                        |> expectEqual
+                            (Dict.singleton "parent" [ "aaa - bbb" ])
+            , Test.test "record of list with bad indentation and a comment" <|
+                \_ ->
+                    given "parent:\n  - aaa #   A comment \n   - bbb\n"
+                        (Yaml.dict <| Yaml.list Yaml.string)
+                        |> expectEqual
+                            (Dict.singleton "parent" [ "aaa  - bbb" ])
+            ]
+        , Test.describe "mapping"
+            [ Test.fuzz (Fuzz.map sanitiseString string) "map a single value" <|
+                \s ->
+                    given s (Yaml.map String.length Yaml.string)
+                        |> expectEqual (String.length <| String.trim s)
+            , Test.fuzz (Fuzz.map2 (\f1 f2 -> ( f1, f2 )) float float) "map 2 values" <|
+                \fs ->
+                    let
+                        ( f1, f2 ) =
+                            fs
+                    in
+                    given
+                        ("aaa: "
+                            ++ stringToFloat f1
+                            ++ "  \nbbb: "
+                            ++ stringToFloat f2
+                        )
+                        (Yaml.map2 (\y1 y2 -> y1 + y2)
+                            (Yaml.field "aaa" Yaml.float)
+                            (Yaml.field "bbb" Yaml.float)
+                        )
+                        |> expectCloseTo (f1 + f2)
             ]
         ]
 
@@ -163,6 +327,21 @@ of a test and the expected value.
 expectEqual : a -> Result Yaml.Error a -> Expect.Expectation
 expectEqual expected got =
     Expect.equal (Ok expected) got
+
+
+{-| Utility function that checks that floats are within a range
+-}
+expectCloseTo : Float -> Result Yaml.Error Float -> Expect.Expectation
+expectCloseTo expected got =
+    case got of
+        Ok gotResult ->
+            Expect.within (Expect.Absolute 0.00000001) expected gotResult
+
+        Err (Yaml.Decoding err) ->
+            Expect.fail err
+
+        Err (Yaml.Parsing err) ->
+            Expect.fail err
 
 
 {-| Utility function that checks the failure mode of a Decoder
