@@ -1,7 +1,7 @@
 {
     "type": "package",
     "name": "MaybeJustJames/yaml",
-    "summary": "A library for converting between Elm values and YAML (based on terezka/yaml).",
+    "summary": "Work with YAML in Elm",
     "license": "BSD-3-Clause",
     "version": "1.0.0",
     "exposed-modules": [
