@@ -5,20 +5,7 @@ import Expect
 import Fuzz exposing (bool, float, int, list, string)
 import Test
 import Yaml.Decode as Yaml
-
-
-stringToFloat : Float -> String
-stringToFloat f =
-    let
-        str =
-            String.fromFloat f
-    in
-    case String.length str of
-        1 ->
-            str ++ ".0"
-
-        _ ->
-            str
+import Yaml.Parser.Util exposing (postProcessString)
 
 
 sanitiseString : String -> String
@@ -57,6 +44,11 @@ sanitiseString s =
                             c
     in
     String.map replaceChar s
+
+
+quoteString : String -> String
+quoteString s =
+    "'" ++ s ++ "'"
 
 
 suite : Test.Test
@@ -109,9 +101,9 @@ suite =
                 \_ -> given "" Yaml.int |> expectFail "Expected int"
             , Test.fuzz float "floats" <|
                 \x ->
-                    given (stringToFloat x) Yaml.float |> expectEqual x
+                    given (String.fromFloat x) Yaml.float |> expectEqual x
             , Test.test "integer as float" <|
-                \_ -> given "0" Yaml.float |> expectFail "Expected float"
+                \_ -> given "0" Yaml.float |> expectEqual 0.0
             , Test.test "rubbish as float" <|
                 \_ -> given "rubbish" Yaml.float |> expectFail "Expected float"
             , Test.test "Empty string as float" <|
@@ -201,11 +193,19 @@ suite =
             , Test.fuzz (list string) "list of strings" <|
                 \xs ->
                     let
+                        sanitised =
+                            List.map sanitiseString xs
+
                         strList : String
                         strList =
-                            "[" ++ String.join ", " xs ++ "]"
+                            "["
+                                ++ String.join ", "
+                                    (List.map quoteString sanitised)
+                                ++ "]"
                     in
-                    given strList (Yaml.list Yaml.string) |> expectEqual xs
+                    given strList (Yaml.list Yaml.string)
+                        |> expectEqual
+                            (List.map (postProcessString << String.replace "\\" "\\\\") sanitised)
             , Test.fuzz (list bool) "list of boolean values" <|
                 \xs ->
                     let
@@ -286,7 +286,7 @@ suite =
                     given "parent:\n  - aaa #   A comment \n   - bbb\n"
                         (Yaml.dict <| Yaml.list Yaml.string)
                         |> expectEqual
-                            (Dict.singleton "parent" [ "aaa  - bbb" ])
+                            (Dict.singleton "parent" [ "aaa - bbb" ])
             ]
         , Test.describe "mapping"
             [ Test.fuzz (Fuzz.map sanitiseString string) "map a single value" <|
@@ -301,9 +301,9 @@ suite =
                     in
                     given
                         ("aaa: "
-                            ++ stringToFloat f1
+                            ++ String.fromFloat f1
                             ++ "  \nbbb: "
-                            ++ stringToFloat f2
+                            ++ String.fromFloat f2
                         )
                         (Yaml.map2 (\y1 y2 -> y1 + y2)
                             (Yaml.field "aaa" Yaml.float)

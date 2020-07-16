@@ -91,6 +91,7 @@ string =
   Decoder <| \v ->
     case v of
       Ast.String_ string_ -> Ok string_
+      Ast.Null_ -> Ok ""
       _ -> Err (Decoding "Expected string")
 
 
@@ -121,6 +122,7 @@ float =
   Decoder <| \v ->
     case v of
       Ast.Float_ float_ -> Ok float_
+      Ast.Int_ int_ -> Ok (toFloat int_)
       _ -> Err (Decoding "Expected float")
 
 {-| Decode a null value.

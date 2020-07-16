@@ -2,11 +2,11 @@ module Yaml.Parser.Util exposing
   ( isColon, isComma, isDot, isDash, isHash, isSpace, isNewLine, isListStart, isListEnd, isRecordStart, isRecordEnd, either, neither, neither3
   , threeDashes, threeDots, spaces, whitespace, multiline
   , singleQuotes, doubleQuotes, remaining
-  , indented
+  , indented, postProcessString
   )
 
 import Parser as P exposing ((|=), (|.))
-import Yaml.Parser.Ast as Ast
+import Regex exposing (Regex)
 
 
 
@@ -174,17 +174,24 @@ multiline indent =
 multilineStep : Int -> List String -> P.Parser (P.Step (List String) String)
 multilineStep indent lines =
   let
-    conclusion line indent_ =
-      if indent_ > indent then
-        P.Loop (line :: lines)
-      else
-        P.Done (String.join "\n" (List.reverse (line :: lines)))
+      multilineString : List String -> String
+      multilineString lines_ =
+          String.join " " (List.reverse lines_)
+
+      conclusion line indent_ =
+          if indent_ > indent then
+              P.Loop (line :: lines)
+          else
+              P.Done (multilineString (line :: lines))
   in
-  P.succeed conclusion
-    |= characters (not << isNewLine)
-    |. P.chompIf isNewLine
-    |. spaces
-    |= P.getCol
+      P.oneOf
+          [ P.succeed conclusion
+            |= characters (not << isNewLine)
+            |. P.chompIf isNewLine
+            |. spaces
+            |= P.getCol
+          , P.succeed (P.Done <| multilineString lines)
+          ]
 
 
 {-| -}
@@ -250,6 +257,21 @@ remaining =
     |. P.chompUntilEndOr "\n...\n"
     |> P.getChompedString
 
+postProcessString : String -> String
+postProcessString str =
+    let
+        regexFromString : String -> Regex
+        regexFromString =
+            Regex.fromString >> Maybe.withDefault Regex.never
+    in
+    str
+        |> Regex.replace (regexFromString "\\s\\s+")
+           (\match ->
+                if String.contains "\n\n" match.match then
+                    "\n"
+                else
+                    " "
+                )
 
 
 -- INDENT
