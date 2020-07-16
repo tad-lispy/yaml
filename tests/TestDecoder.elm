@@ -127,7 +127,7 @@ suite =
             , Test.test "nullable float" <|
                 \_ -> given "" (Yaml.nullable Yaml.float) |> expectEqual Maybe.Nothing
             ]
-        , Test.describe "object primitives"
+        , Test.describe "record primitives"
             [ Test.test "access first existing field" <|
                 \_ -> given "hello: 5\nworld:6" (Yaml.field "hello" Yaml.int) |> expectEqual 5
             , Test.test "access second existing field" <|
@@ -141,26 +141,44 @@ suite =
                     given "hello:\n  world: 2"
                         (Yaml.at [ "hello", "world", "foo" ] Yaml.int)
                         |> expectFail "Expected record"
-            , Test.test "try 2 fields where the first exists" <|
+            ]
+        , Test.describe "inconsistent structure"
+            [ Test.test "try 2 fields where the first exists" <|
                 \_ ->
                     given "  aaa: 0"
-                        (Yaml.or (Yaml.field "aaa" Yaml.int) (Yaml.field "bbb" Yaml.int))
+                        (Yaml.oneOf
+                            [ Yaml.field "aaa" Yaml.int
+                            , Yaml.field "bbb" Yaml.int
+                            ]
+                        )
                         |> expectEqual 0
             , Test.test "try 2 fields where the second exists" <|
                 \_ ->
                     given "zzz: 2\nbbb: 0"
-                        (Yaml.or (Yaml.field "aaa" Yaml.int) (Yaml.field "bbb" Yaml.int))
+                        (Yaml.oneOf
+                            [ Yaml.field "aaa" Yaml.int
+                            , Yaml.field "bbb" Yaml.int
+                            ]
+                        )
                         |> expectEqual 0
             , Test.test "try 2 fields where both exist" <|
                 \_ ->
                     given "  aaa: 0\n  bbb: 1  "
-                        (Yaml.or (Yaml.field "aaa" Yaml.int) (Yaml.field "bbb" Yaml.int))
+                        (Yaml.oneOf
+                            [ Yaml.field "aaa" Yaml.int
+                            , Yaml.field "bbb" Yaml.int
+                            ]
+                        )
                         |> expectEqual 0
             , Test.test "try 2 fields where neither exist" <|
                 \_ ->
                     given "  aaa: 1\n  bbb: 2  \n"
-                        (Yaml.or (Yaml.field "ddd" Yaml.int) (Yaml.field "eee" Yaml.int))
-                        |> expectFail "Expected property: eee"
+                        (Yaml.oneOf
+                            [ Yaml.field "ddd" Yaml.int
+                            , Yaml.field "eee" Yaml.int
+                            ]
+                        )
+                        |> expectFail "Empty"
             , Test.test "try one of several decoders" <|
                 \_ ->
                     given ""

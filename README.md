@@ -1,8 +1,26 @@
 # YAML in Elm
 
-This package helps you convert between Elm values and YAML values.
+Convert between type-safe Elm values and [YAML](https://yaml.org).
 
-## Example
+This is forked from [terezka/yaml](https://package.elm-lang.org/packages/terezka/yaml/latest/).
+
+## Install
+
+```bash
+$ elm install MaybeJustJames/yaml
+```
+
+and import the library in an elm file like this
+
+```elm
+import Yaml.Decode -- for decoders
+```
+
+## Documentation
+
+Find the documentation on [Elm's package website](http://package.elm-lang.org/packages/MaybeJustJames/yaml/latest).
+
+## Example Usage
 
 Say you have some YAML which looks like this:
 
@@ -12,46 +30,69 @@ Say you have some YAML which looks like this:
     first: Marie
     last: Curie
   occupation: [ chemist, physicist ]
-  nationality: Polish
+  age: 66
+  children: [ Irène, Ève ]
 - name:
     first: Alva
     last: Myrdal
   occupation: [ sociologist, diplomat, politician ]
-  nationality: Swedish
+  age: 84
+  children: []
 - name:
     first: Svetlana
     last: Alexievich
   occupation: [ journalist, historian ]
-  nationality: Belarusian
+  age: 72
+  children: []
 ...  
 ```
 
 to decode this, you could write
 
 ```elm
-module Woman exposing (Woman, decoder)
-
-import Yaml.Decode
+import Yaml.Decode (..)
 
 type alias Woman =
-  { firstName : String
-  , lastName : String
+  { name : String
   , occupation : List String
-  , nationality : String
+  , age : Int
+  , children : Int -- number of children
   }
 
-decoder : Yaml.Decode.Decoder Woman
+decoder : Decoder Woman
 decoder =
-  Yaml.Decode.map4 Woman
-    (Yaml.Decode.at [ "name", "first" ] Yaml.Decode.string)
-    (Yaml.Decode.at [ "name", "last" ] Yaml.Decode.string)
-    (Yaml.Decode.field "occupation" (Yaml.Decode.list Yaml.Decode.string))
-    (Yaml.Decode.field "nationality" Yaml.Decode.string)
+  map4 Woman
+    (map2 (\first last -> first ++ " " ++ last)
+          (at ["name", "first"] string)
+          (at ["name", "last"] string))
+    (field "occupation" (list string))
+    (field "age" int)
+    (map List.length (field "children" (list string)))
+
+
+fromString
+  (list decoder)
+  yamlString -- The string containing the YAML example above
 
 ```
 
-and run your decoder with `Yaml.Decode.fromString (Yaml.Decode.list Woman.decoder) yamlString`!
+## Development
 
-## Work in progress
+The branch `parser-logging` contains a version of the
+[parser logger](https://discourse.elm-lang.org/t/improved-parser-logger/5964)
+by @Janiczek.
 
-This package was build to be able to parse data like [this](https://github.com/unitedstates/congress-legislators/blob/master/legislators-current.yaml), and even if it has a few more features (multiline strings, comments) than necessary to parse that file, YAML is a large and complex format, and this parser is still missing a lot of YAML features like references and various logical operations. It is also missing `Yaml.Encode`!
+This, along with writing detailed tests using [elm-test](https://github.com/elm-community/elm-test)
+is how I've been developing this package.
+
+Please feel encouraged and welcome to submit bugs, PRs, etc.
+
+
+## Major Missing Features
+
+- `Yaml.Encode` to encode Elm values into YAML.
+- Testing against the official [YAML test suite](https://github.com/yaml/yaml-test-suite).
+
+## Copying
+
+You are free to copy, modify, and distribute this package with attribution under the terms of the MIT license. See the [LICENSE](LICENSE) file for details.

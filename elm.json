@@ -1,9 +1,9 @@
 {
     "type": "package",
-    "name": "terezka/yaml",
-    "summary": "A library for parsing and decoding YAML.",
+    "name": "MaybeJustJames/yaml",
+    "summary": "Work with YAML in Elm",
     "license": "BSD-3-Clause",
-    "version": "1.0.1",
+    "version": "1.0.0",
     "exposed-modules": [
         "Yaml.Decode"
     ],
