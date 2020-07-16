@@ -1,20 +1,32 @@
 module Yaml.Decode exposing 
-  ( Decoder, Error(..), fromString
+  ( Decoder, Error(..)
+  , fromString, fromValue, errorToString
   , string, bool, int, float, null
   , nullable, list, dict
-  , field, at, or, oneOf
-  , Value, value, sometimes, fail, succeed, andThen, lazy
+  , field, at, oneOf, maybe
+  , Value, value, fail, succeed, andThen, lazy
   , map, map2, map3, map4, map5, map6, map7, map8
   )
 
 {-|
 
-Turn YAML values into Elm values. The library is structured the same way
-as a `Json.Decode` in `elm/json`, so if you haven't worked with decoders 
+Turn [YAML](https://yaml.org) into Elm values. The library is structured a similar way
+to [`Json.Decode`](elm/json/latest/Json.Decode), so if you haven't worked with decoders 
 before, reading through [the guide](https://guide.elm-lang.org/effects/json.html)
-maybe be helpful.
+may be helpful.
 
-@docs Decoder, Error, fromString
+## Table of Contents
+- **Primitives**: [int](#int), [string](#string), [bool](#bool), [float](#float), [null](#null)
+- **Data Structures**: [nullable](#nullable), [list](#list), [dict](#dict)
+- **Record Primitives**: [field](#field), [at](#at)
+- **Inconsistent Structure**: [oneOf](#oneOf), [maybe](#maybe)
+- **Maps**: [map](#map), [map2](#map2), [map3](#map3), [map4](#map4), [map5](#map5), [map6](#map6), [map7](#map7), [map8](#map8)
+- **Fancy Decoding**: [lazy](#lazy), [value](#value), [fail](#fail), [succeed](#succeed), [andThen](#andThen)
+
+@docs Decoder
+
+# Run Decoders
+@docs fromString, Value, Error, fromValue, errorToString
 
 # Primitives
 @docs string, bool, int, float, null
@@ -22,14 +34,17 @@ maybe be helpful.
 # Data Structures
 @docs nullable, list, dict
 
-# Object Primitives
-@docs field, at, or, oneOf
+# Record Primitives
+@docs field, at
+
+# Inconsistent Structure
+@docs oneOf, maybe
 
 # Maps
 @docs map, map2, map3, map4, map5, map6, map7, map8
 
-# Special
-@docs Value, value, sometimes, fail, succeed, andThen, lazy
+# Fancy Decoding
+@docs lazy, value, fail, succeed, andThen
 
 
 -}
@@ -49,42 +64,64 @@ for a more comprehensive introduction!
 type Decoder a =
   Decoder (Yaml.Value -> Result Error a)
 
+-- RUN DECODERS
 
-{-| Represents a YAML value.
+{-| Represents a YAML tree.
 -}
 type alias Value =
   Yaml.Value
 
 
-{-| -}
-type Error -- TODO
+{-| A structured error describing how a decoder failed.
+-}
+type Error
   = Parsing String
   | Decoding String
 
+{-| Decode a given string into an Elm value based on the
+provided `Decoder`. This will fail if the string is not
+well-formed YAML or if the `Decoder` doesn't match the
+input.
 
-{-| -}
+    fromString int "4"     == Ok 4
+    fromString int "hello" == Err ...
+-}
 fromString : Decoder a -> String -> Result Error a
 fromString decoder raw =
   case Yaml.fromString raw of
     Ok v -> fromValue decoder v
     Err error -> Err (Parsing error)
 
-
-fromValue : Decoder a -> Yaml.Value -> Result Error a
+{-| Run a `Decoder` on a Yaml `Value`.
+-}
+fromValue : Decoder a -> Value -> Result Error a
 fromValue (Decoder decoder) v =
   decoder v
 
-{-| A faked lazy function the enables recirsive decoders.
+{-| Convert a strcutured error into a `String` that is nice for debugging.
 -}
-lazy : (() -> Decoder a) -> Decoder a
-lazy t =
-    succeed () |> andThen t
+errorToString : Error -> String
+errorToString e =
+    case e of
+        Parsing msg ->
+            "Error in parsing: " ++ msg
+
+        Decoding msg ->
+            "Error in decoding: " ++ msg
 
 
 -- PRIMITIVES
 
 
-{-| Decode a YAML string into an Elm `String`. 
+{-| Decode a YAML string into an Elm `String`.
+
+    fromString string "true"      == Err ...
+    fromString string "'true'"    == Ok "true"
+    fromString string "42"        == Err ...
+    fromString string "'42'"      == Ok "42"
+    fromString string "hello"     == Ok "hello"
+    fromString string "hello: 42" == Err ...
+
 -}
 string : Decoder String
 string =
@@ -96,6 +133,13 @@ string =
 
 
 {-| Decode a YAML boolean into an Elm `Bool`.
+
+    fromString bool "true"      == Ok True
+    fromString bool "'true'"    == Err ...
+    fromString bool "42"        == Err ...
+    fromString bool "hello"     == Err ...
+    fromString bool "hello: 42" == Err ...
+
 -}
 bool : Decoder Bool
 bool =
@@ -106,6 +150,15 @@ bool =
 
 
 {-| Decode a YAML number into an Elm `Int`.
+
+    fromString int "true"      == Err ...
+    fromString int "'true'"    == Err ...
+    fromString int "42"        == Ok 42
+    fromString int "'42'"      == Err ...
+    fromString int "3.14"      == Err ...
+    fromString int "hello"     == Err ...
+    fromString int "hello: 42" == Err ...
+
 -}
 int : Decoder Int
 int =
@@ -116,6 +169,15 @@ int =
 
 
 {-| Decode a YAML number into an Elm `Float`.
+
+    fromString float "true"      == Err ...
+    fromString float "'true'"    == Err ...
+    fromString float "42"        == Ok 42
+    fromString float "'42'"      == Err ...
+    fromString float "3.14"      == Ok 3.14
+    fromString float "hello"     == Err ...
+    fromString float "hello: 42" == Err ...
+
 -}
 float : Decoder Float
 float =
@@ -125,7 +187,14 @@ float =
       Ast.Int_ int_ -> Ok (toFloat int_)
       _ -> Err (Decoding "Expected float")
 
-{-| Decode a null value.
+{-| Decode a YAML null value into [Nothing](elm/core/latest/Maybe).
+
+    fromString null ""          == Ok Nothing
+    fromString null "null"      == Ok Nothing
+    fromString null "true"      == Err ...
+    fromString null "42"        == Err ...
+    fromString null "hello: 42" == Err ...
+
 -}
 null : Decoder (Maybe a)
 null =
@@ -135,6 +204,12 @@ null =
             _ -> Err (Decoding "Expected null")
 
 {-| Decode a nullable YAML value into an Elm value.
+
+    fromString (nullable int) "42"   == Ok (Just 42)
+    fromString (nullable int) "3.14" == Err ...
+    fromString (nullable int) "null" == Ok Nothing
+    fromString (nullable int) "true" == Err ...
+
 -}
 nullable : Decoder a -> Decoder (Maybe a)
 nullable decoder =
@@ -145,6 +220,10 @@ nullable decoder =
 
 
 {-| Decode a YAML array into an Elm `List`.
+
+    fromString (list int) "[1,2,3]"          == Ok [1,2,3]
+    fromString (list bool) "[ true, false ]" == Ok [True,False]
+
 -}
 list : Decoder a -> Decoder (List a)
 list decoder =
@@ -153,11 +232,42 @@ list decoder =
       Ast.List_ list_ -> singleResult (List.map (fromValue decoder) list_)
       _ -> Err (Decoding "Expected list")
 
+{-| Decode a YAML record into an Elm `Dict`.
 
-{-| Decode a YAML object, requiring a particular field.
+    fromString (dict int) "{ alice: 42, bob: 99 }"
+      == Ok (Dict.fromList [("alice",42), ("bob",99)])
 
-The object can have other fields. Lots of them! The only thing this decoder 
-cares about is if x is present and that the value there is an `a`.
+-}
+dict : Decoder a -> Decoder (Dict.Dict String a)
+dict decoder =
+    Decoder <| \v ->
+        case v of
+            Ast.Record_ properties ->
+                properties
+                    |> Dict.toList
+                    |> List.map (\( key, val ) -> ( key, fromValue decoder val ))
+                    |> List.filterMap (\( key, val ) ->
+                                           case val of
+                                               Ok val_ -> Just ( key, val_ )
+                                               _ -> Nothing
+                                      )
+                    |> Dict.fromList
+                    |> Ok
+            _ -> Err (Decoding "Expected record")
+
+-- RECORD PRIMITIVES
+
+{-| Decode a YAML record, requiring a particular field.
+
+    fromString (field "x" int) "{ x: 3 }"            == Ok 3
+    fromString (field "x" int) "{ x: 3, y: 4 }"      == Ok 3
+    fromString (field "x" int) "{ x: true }"         == Err ...
+    fromString (field "x" int) "{ y: 4 }"            == Err ...
+
+    fromString (field "name" string) "{ name: Tom }" == Ok "Tom"
+
+The record _can_ have other fields. Lots of them! The only thing this decoder 
+cares about is if `x` is present and that the value there can be decoded.
 
 Check out [map2](#map2) to see how to decode multiple fields!
 
@@ -168,7 +278,18 @@ field name decoder =
     find [ name ] decoder v
 
 
-{-| Decode a nested YAML object, requiring certain fields. 
+{-| Decode a nested YAML record, requiring certain fields. 
+
+    yaml = """{ person: { name: Tom, age: 42 } }"""
+
+    fromString (at ["person", "name"] string) yaml == Ok "Tom"
+    fromString (at ["person", "age"] int) yaml     == Ok 42
+
+This is really just shorthand for `field`. Equivalent to
+saying things like:
+
+    field "person" (field "name" string) == at ["person", "name"] string
+
 -}
 at : List String -> Decoder a -> Decoder a
 at names decoder =
@@ -177,12 +298,45 @@ at names decoder =
 
 
 
--- SPECIAL
+-- FANCY DECODING
+
+{-| Decode YAML with a recursive (nested) structure.
+
+An example is nested comments:
+
+    type alias Comment =
+      { comment : String
+      , responses : Responses
+      }
+
+    type Responses = Responses (List Comment)
+
+    comment : Decoder Comment
+    comment =
+      map2 Comment
+        (field "comment" string)
+        (field "responses" (map Responses (list (lazy (\_ -> comment)))))
+
+    yaml = "{ comment: 'hello world', responses: [ {comment: 'hello', responses: [] } ] }"
+    fromString comment yaml
+      == Ok { comment = "'hello world'", responses = Responses [{ comment = "'hello'", responses = Responses [] }] }
+
+By using `lazy` you make sure that the decoder only expands
+to be as deep as the YAML structure. You can read more about
+recursive data structures
+[here](https://github.com/elm/compiler/blob/master/hints/recursive-alias.md).
+
+-}
+lazy : (() -> Decoder a) -> Decoder a
+lazy t =
+    succeed () |> andThen t
 
 
 {-| Do not do anything with a YAML value, just bring it into 
 Elm as a `Value`. This can be useful if you have particularly 
-complex data that you would like to deal with later.
+complex data that you would like to deal with later. Or if you
+are going to send it out of a port and do not care about its
+structure.
 -}
 value : Decoder Value
 value =
@@ -190,19 +344,11 @@ value =
     Ok v
 
 
-{-| A decoder which returns `Nothing` when it fails.
+{-| Ignore the YAML and produce a given Elm value.
 
-Note: This is equivalent to `maybe` from `Json.Decode`.
--}
-sometimes : Decoder a -> Decoder (Maybe a)
-sometimes decoder =
-  Decoder <| \v ->
-    case fromValue decoder v of
-      Ok a -> Ok (Just a)
-      Err _ -> Ok Nothing
-
-
-{-| Ignore the YAML and produce a certain Elm value.
+    fromString (succeed 42) "true" == Ok 42
+    fromString (succeed 42) "[]"   == Ok 42
+    fromString (succeed 42) "{ "   == Err ... -- this in not a valid YAML string
 -}
 succeed : a -> Decoder a
 succeed v =
@@ -224,6 +370,30 @@ fail error =
 
 
 {-| Create decoders that depend on previous results.
+
+For example, if you decoding depends on a `version`
+field:
+
+    info : Decoder Info
+    info =
+      field "version" int
+        |> andThen infoHelp -- infoHelp takes the "version" integer as its argument
+
+    infoHelp : Int -> Decoder Info
+    infoHelp version =
+      case version of
+        4 ->
+          infoDecoder4
+
+        3 ->
+          infoDecoder3
+
+        _ ->
+          fail <|
+            "Version " ++ toString version ++ " is not supported."
+
+    -- infoDecoder4 : Decoder Info
+    -- infoDecoder3 : Decoder Info
 -}
 andThen : (a -> Decoder b) -> Decoder a -> Decoder b
 andThen next decoder =
@@ -231,6 +401,40 @@ andThen next decoder =
     case fromValue decoder v0 of
       Ok a -> fromValue (next a) v0
       Err err -> Err err
+
+-- INCONSISTENT STRUCTURE
+
+{-| Makes its argument optional.
+A decoder which returns `Nothing` when it fails.
+
+Helpful when dealing with optional fields: you probably want to
+use `maybe` outside `field` or `at`. Here are a few examples:
+
+    yaml = "{ name: Stacy, age: 27, temperature: 37.6 }"
+
+    fromString (maybe (field "age" int)) yaml      == Ok (Just 27)
+    fromString (maybe (field "height" float)) yaml == Ok Nothing
+
+These two examples decode to `Nothing` if a field does not exist.
+They say there _may_ be an `age` field, if it exists it _must_
+be an integer. And there _may_ be a `height` field, if it exists
+it _must_ be a `Float`.
+
+You can also decode to `Nothing` if a field is a different type:
+
+    fromString (field "temperature" (maybe int)) == Ok Nothing
+    fromString (field "age" (maybe int))         == Ok (Just 27)
+
+These two examples say you _must_ have `temperature` and
+`age` fields and the content _may_ be integers.
+-}
+maybe : Decoder a -> Decoder (Maybe a)
+maybe decoder =
+  Decoder <| \v ->
+    case fromValue decoder v of
+      Ok a -> Ok (Just a)
+      Err _ -> Ok Nothing
+
 
 {-| Try a list of different decoders. Pick the first working one.
 This can be useful if the YAML comes in different formats. For
@@ -250,32 +454,21 @@ or lp rp =
             Ok a -> Ok a
             Err _ -> fromValue rp v
 
-{-| This can be used to decode a dictionary, the result is a list
-of key/value pairs. This function can be called in conjunction
-with `oneOf` to define more complex decoders.
--}
-dict : Decoder a -> Decoder (Dict.Dict String a)
-dict decoder =
-    Decoder <| \v ->
-        case v of
-            Ast.Record_ properties ->
-                properties
-                    |> Dict.toList
-                    |> List.map (\( key, val ) -> ( key, fromValue decoder val ))
-                    |> List.filterMap (\( key, val ) ->
-                                           case val of
-                                               Ok val_ -> Just ( key, val_ )
-                                               _ -> Nothing
-                                      )
-                    |> Dict.fromList
-                    |> Ok
-            _ -> Err (Decoding "Expected record")
-
-
 -- MAPS
 
 
-{-| Transform a decoder.
+{-| Transform the result of a decoder. For example,
+get the length of a string:
+
+    stringLength : Decoder Int
+    stringLength =
+      map String.length string
+
+    fromString stringLength "hello" == Ok 5
+
+`map` runs the decoder (`string` in the example above) and
+gives the result to the function (`String.length` in the
+example above).
 -}
 map : (a -> b) -> Decoder a -> Decoder b
 map func (Decoder a) =
@@ -284,7 +477,22 @@ map func (Decoder a) =
       Err err -> Err err
       Ok av -> Ok (func av)
 
-{-| Try two decoders and then combine the result.
+{-| Try two decoders and then combine the result. You can use this to
+decode records with 2 fields:
+
+    type alias Point = { x : Float, y : Float }
+
+    point : Decoder Point
+    point =
+      map2 Point
+         (field "x" float)
+         (field "y" float)
+
+    fromString point "{x: 1.2, y: 2.5}" == Ok { x = 1.2, y = 2.5 }
+
+`map2` runs each decoder in order and privides the results to the
+function (taking 2 arguments; the `Point` constructor in the example
+above).
 -}
 map2 : (a -> b -> c) -> Decoder a -> Decoder b -> Decoder c
 map2 func (Decoder a) (Decoder b) =
@@ -407,7 +615,7 @@ map7 func (Decoder a) (Decoder b) (Decoder c) (Decoder d) (Decoder e) (Decoder f
                               Ok gv -> Ok (func av bv cv dv ev fv gv)
 
 
-{-| Try seven decoders and then combine the result.
+{-| Try eight decoders and then combine the result.
 -}
 map8 : (a -> b -> c -> d -> e -> f -> g -> h -> i) -> Decoder a -> Decoder b -> Decoder c -> Decoder d -> Decoder e -> Decoder f -> Decoder g -> Decoder h -> Decoder i
 map8 func (Decoder a) (Decoder b) (Decoder c) (Decoder d) (Decoder e) (Decoder f) (Decoder g) (Decoder h) =
