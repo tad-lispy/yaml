@@ -90,8 +90,8 @@ Please feel encouraged and welcome to submit bugs, PRs, etc.
 
 ## Major Missing Features
 
-- `Yaml.Encode` to encode Elm values into YAML.
-- Testing against the official [YAML test suite](https://github.com/yaml/yaml-test-suite).
+- `Yaml.Encode` to encode Elm values into YAML. [#12](https://github.com/MaybeJustJames/yaml/issues/12)
+- Testing against the official [YAML test suite](https://github.com/yaml/yaml-test-suite). [#7](https://github.com/MaybeJustJames/yaml/issues/7)
 
 ## Copying
 
