@@ -98,7 +98,7 @@ fromValue : Decoder a -> Value -> Result Error a
 fromValue (Decoder decoder) v =
   decoder v
 
-{-| Convert a strcutured error into a `String` that is nice for debugging.
+{-| Convert a structured error into a `String` that is nice for debugging.
 -}
 errorToString : Error -> String
 errorToString e =
