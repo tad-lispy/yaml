@@ -10,10 +10,9 @@ module Yaml.Decode exposing
 
 {-|
 
-Turn [YAML](https://yaml.org) into Elm values. The library is structured a similar way
-to [`Json.Decode`](elm/json/latest/Json.Decode), so if you haven't worked with decoders 
-before, reading through [the guide](https://guide.elm-lang.org/effects/json.html)
-may be helpful.
+Turn [YAML](https://yaml.org) into Elm values. The library is structured in a similar way
+to `Json.Decode`, so if you haven't worked with decoders before, reading through
+ [the guide](https://guide.elm-lang.org/effects/json.html) may be helpful.
 
 ## Table of Contents
 - **Primitives**: [int](#int), [string](#string), [bool](#bool), [float](#float), [null](#null)
@@ -54,10 +53,10 @@ import Yaml.Parser.Ast as Ast
 import Dict
 
 
-{-| A value that knows how to decode YAML values.
+{-| A value that knows how to decode YAML.
 
 There is a whole section in guide.elm-lang.org about decoders, 
-so [check it out](https://guide.elm-lang.org/effects/json.html) 
+so [check it out](https://guide.elm-lang.org/effects/json.html)
 for a more comprehensive introduction!
 
 -}
