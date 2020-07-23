@@ -1,12 +1,13 @@
-module Yaml.Encode exposing (Encoder, bool, float, int, list, quotedString, string, toString)
+module Yaml.Encode exposing (Encoder, bool, float, int, list, record, string, toString)
 
-import Regex exposing (Regex)
+import Dict exposing (Dict)
 import Yaml.Parser.Ast exposing (Value(..))
 
 
 type alias EncoderState =
-    { col : Int
-    , indent : Int
+    { col : Int -- Current column
+    , indent : Int -- Encoder indent level
+    , prefix : Bool -- prefix encoder output
     }
 
 
@@ -14,6 +15,7 @@ initState : Int -> EncoderState
 initState indent =
     { col = 0
     , indent = indent
+    , prefix = False
     }
 
 
@@ -29,57 +31,81 @@ toString indent =
 
 string : String -> Encoder String
 string s =
-    let
-        regexFromString : String -> Regex
-        regexFromString =
-            Regex.fromString >> Maybe.withDefault Regex.never
-    in
-    case Regex.contains (regexFromString "\\s") s of
-        True ->
-            quotedString s
+    Encoder
+        (\state ->
+            if state.prefix then
+                " " ++ s
 
-        False ->
-            Encoder (\_ -> s)
-
-
-quotedString : String -> Encoder String
-quotedString s =
-    Encoder (\_ -> "\"" ++ s ++ "\"")
+            else
+                s
+        )
 
 
 int : Int -> Encoder Int
 int i =
-    Encoder (\_ -> String.fromInt i)
+    Encoder
+        (\state ->
+            let
+                rep =
+                    String.fromInt i
+            in
+            if state.prefix then
+                " " ++ rep
+
+            else
+                rep
+        )
 
 
 float : Float -> Encoder Float
 float f =
-    let
-        sign =
-            if f < 0 then
-                "-"
+    Encoder
+        (\state ->
+            let
+                prefix =
+                    if state.prefix then
+                        " "
+
+                    else
+                        ""
+
+                sign =
+                    if f < 0 then
+                        "-"
+
+                    else
+                        ""
+            in
+            if isNaN f then
+                prefix ++ ".nan"
+
+            else if isInfinite f then
+                prefix ++ sign ++ ".inf"
 
             else
-                "+"
-    in
-    if isNaN f then
-        Encoder (\_ -> ".nan")
-
-    else if isInfinite f then
-        Encoder (\_ -> sign ++ ".inf")
-
-    else
-        Encoder (\_ -> String.fromFloat f)
+                prefix ++ String.fromFloat f
+        )
 
 
 bool : Bool -> Encoder Bool
 bool b =
-    case b of
-        True ->
-            Encoder (\_ -> "true")
+    Encoder
+        (\state ->
+            let
+                prefix =
+                    if state.prefix then
+                        " "
 
-        False ->
-            Encoder (\_ -> "false")
+                    else
+                        ""
+            in
+            case b of
+                True ->
+                    prefix ++ "true"
+
+                False ->
+                    prefix ++ "false"
+        )
 
 
 list : (a -> Encoder a) -> List a -> Encoder (List a)
@@ -124,6 +150,64 @@ encodeList encode state l =
 
     else
         String.repeat (state.indent - 2) " " ++ encoded
+
+
+record : (k -> String) -> (v -> Encoder v) -> Dict k v -> Encoder (Dict k v)
+record key value r =
+    Encoder
+        (\state ->
+            case state.indent of
+                0 ->
+                    encodeInlineRecord key value r
+
+                _ ->
+                    encodeRecord key value state r
+        )
+
+
+encodeInlineRecord : (k -> String) -> (v -> Encoder v) -> Dict k v -> String
+encodeInlineRecord key value r =
+    let
+        stringify : Dict k v -> List String
+        stringify d =
+            d
+                |> Dict.map (\_ -> value >> toString 0)
+                |> Dict.toList
+                |> List.map (\( fst, snd ) -> key fst ++ ": " ++ snd)
+    in
+    "{"
+        ++ (stringify r |> String.join ",")
+        ++ "}"
+
+
+encodeRecord : (k -> String) -> (v -> Encoder v) -> EncoderState -> Dict k v -> String
+encodeRecord key value state r =
+    let
+        recordElement : ( k, v ) -> String
+        recordElement ( key_, value_ ) =
+            let
+                newState =
+                    { state | prefix = True, col = state.col + state.indent }
+            in
+            key key_ ++ ":" ++ (internalConvertToString newState << value) value_
+
+        prefix : String
+        prefix =
+            if state.prefix then
+                "\n"
+
+            else
+                ""
+
+        indentAfter : String -> String
+        indentAfter s =
+            s ++ String.repeat state.col " "
+    in
+    r
+        |> Dict.toList
+        |> List.map recordElement
+        |> String.join (indentAfter "\n")
+        |> String.append (indentAfter prefix)
 
 
 internalConvertToString : EncoderState -> Encoder a -> String
