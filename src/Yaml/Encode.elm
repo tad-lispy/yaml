@@ -1,18 +1,20 @@
 module Yaml.Encode exposing
     ( Value
     , toString
-    , string, int, float, bool
+    , string, int, float, bool, null
     , list, record, dict
     , document
     )
 
-{-| Turn Elm values into [YAML](https://yaml.org). The library is structured in a similar way
-to `Json.Encode`.
+{-| Turn Elm values into [YAML](https://yaml.org). You use `Yaml.Encode` in a very similar
+way to how you use `Json.Encode`. For an excellent introduction to encoding (with `Json.Encode`)
+have a look at
+[this blog post](https://korban.net/posts/elm/2018-09-12-generate-json-from-elm-values-json-encode/).
 
 
 ## Table of Contents
 
-  - **Primitives**: [int](#int), [string](#string), [bool](#bool), [float](#float)
+  - **Primitives**: [int](#int), [string](#string), [bool](#bool), [float](#float), [null](#null)
   - **Data Structures**: [list](#list), [record](#record), [dict](#dict)
   - **YAML specifics**: [document](#document)
 
@@ -26,7 +28,7 @@ to `Json.Encode`.
 
 # Primitives
 
-@docs string, int, float, bool
+@docs string, int, float, bool, null
 
 
 # Data Structures
@@ -41,6 +43,7 @@ to `Json.Encode`.
 -}
 
 import Dict exposing (Dict)
+import Yaml.Parser exposing (Value)
 
 
 {-| Keep track of Encoder state while encoding
@@ -117,11 +120,7 @@ string : String -> Value
 string s =
     Value
         (\state ->
-            if state.prefix then
-                " " ++ s
-
-            else
-                s
+            prefixed " " state s
         )
 
 
@@ -138,15 +137,8 @@ int : Int -> Value
 int i =
     Value
         (\state ->
-            let
-                rep =
-                    String.fromInt i
-            in
-            if state.prefix then
-                " " ++ rep
-
-            else
-                rep
+            String.fromInt i
+                |> prefixed " " state
         )
 
 
@@ -174,28 +166,24 @@ float f =
     Value
         (\state ->
             let
-                prefix =
-                    if state.prefix then
-                        " "
-
-                    else
-                        ""
-
                 sign =
                     if f < 0 then
                         "-"
 
                     else
                         ""
+
+                val =
+                    if isNaN f then
+                        ".nan"
+
+                    else if isInfinite f then
+                        sign ++ ".inf"
+
+                    else
+                        String.fromFloat f
             in
-            if isNaN f then
-                prefix ++ ".nan"
-
-            else if isInfinite f then
-                prefix ++ sign ++ ".inf"
-
-            else
-                prefix ++ String.fromFloat f
+            prefixed " " state val
         )
 
 
@@ -210,26 +198,41 @@ bool : Bool -> Value
 bool b =
     Value
         (\state ->
-            let
-                prefix =
-                    if state.prefix then
-                        " "
+            prefixed " "
+                state
+                (if b then
+                    "true"
 
-                    else
-                        ""
-            in
-            case b of
-                True ->
-                    prefix ++ "true"
-
-                False ->
-                    prefix ++ "false"
+                 else
+                    "false"
+                )
         )
+
+
+{-| Encode a YAML `null` value
+
+    toString 0 null --> "null"
+
+    toString 2 (record [ ("null", null) ])
+    --> "null: null"
+
+-}
+null : Value
+null =
+    Value
+        (\state ->
+            prefixed " " state "null"
+        )
+
+
+
+-- DATA STRUCTURES
 
 
 {-| Encode a `List` into a YAML list.
 
-    toString 0 (list float [1.1, 2.2, 3.3]) --> "[1.1,2.2,3.3]"
+    toString 0 (list float [1.1, 2.2, 3.3])
+    --> "[1.1,2.2,3.3]"
 
     toString 2 (list string ["a", "b"])
     --> "- a\n- b"
@@ -291,9 +294,18 @@ encodeList encode state l =
     import Dict
 
 
-    toString 0 (dict identity int (Dict.singleton "Sue" 38)) --> "{Sue: 38}"
+    toString 0 (dict
+                  identity
+                  int (Dict.singleton "Sue" 38))
+    --> "{Sue: 38}"
 
-    toString 2 (dict identity string (Dict.fromList [("hello", "foo"), ("world", "bar")]))
+    toString 2 (dict
+                  identity
+                  string (Dict.fromList [ ("hello", "foo")
+                                        , ("world", "bar")
+                                        ]
+                         )
+               )
     --> "hello: foo\nworld: bar"
 
 -}
@@ -361,7 +373,7 @@ encodeDict key value state r =
                        , ( "height", int 187)
                        ]
                )
-    -- "{name: Sally,height:187}"
+    --> "{name: Sally,height: 187}"
 
     toString 2 (record [ ( "foo", int 42 )
                        , ( "bar", float 3.14 )
@@ -428,15 +440,19 @@ encodeRecord state r =
 
 {-| Encode a YAML document
 
-YAML "documents" are demarked by "---" at the beginning and
-"..." at the end. This encoder places a value into a
-demarkated YAML document.
+YAML "documents" are demarked by "`---`" at the beginning and
+"`...`" at the end. This encoder places a value into a
+demarcated YAML document.
 
     toString 0 (document <| string "hello")
     --> "---\nhello\n..."
 
-    toString 2 (Encode.doc <| record [ ("hello", int 5), ("foo", int 3) ])
-    -- "---\nhello: 5\nfoo: 3\n..."
+    toString 2 (document
+                  <| record [ ("hello", int 5)
+                            , ("foo", int 3)
+                            ]
+               )
+    --> "---\nhello: 5\nfoo: 3\n..."
 
 -}
 document : Value -> Value
@@ -447,3 +463,12 @@ document val =
                 ++ internalConvertToString state val
                 ++ "\n..."
         )
+
+
+prefixed : String -> EncoderState -> String -> String
+prefixed prefix state val =
+    if state.prefix then
+        prefix ++ val
+
+    else
+        val
