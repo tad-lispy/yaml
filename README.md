@@ -82,11 +82,115 @@ fromString
 
 ### Encoding your Elm values into YAML
 
-Say you are manipulating Docker compose configuration files which you might model like so:
+Say you are manipulating Github Actions configuration files which you might model like so:
 
 ```elm
 import Yaml.Encode (..)
 
+-- Top-level structure
+type alias GHActions =
+    { name : String
+    , trigger : List String
+    , jobs : List Action
+    }
+
+type alias Action =
+    { id : String
+    , name : String
+    , runsOn : String
+    , steps : List Step
+    }
+
+type alias Step =
+    { name : String
+    , uses : String
+    , run : String
+    }
+
+-- top-level encoder
+encodeGHA : GHActions -> Value
+encodeGHA action =
+    record
+        [ ("name", string action.name)
+        , ("on", list (string action.trigger))
+        , ("jobs", encodeJobs action.jobs)
+        ]
+
+encodeJobs : List Action -> Value
+encodeJobs actions =
+    actions
+        |> List.map (\action -> (action.id, encodeJob action))
+        |> record
+
+encodeJob : Action -> Value
+encodeJob action =
+    record
+        [ ("name", action.name)
+        , ("runs-on", action.runsOn)
+        , ("steps", list (encodeStep action.steps))
+        ]
+
+encodeStep : Step -> Value
+    record
+        [ ("name", step.name)
+        , ("uses", step.uses)
+        , ("run", step.run)
+        ]
+```
+
+Now that you have modelled the data and defined encoders,
+encoding into a YAML formatted string is done like:
+```elm
+-- An example Elm value that we could encode:
+myAction : GHActions
+myAction =
+    { name = "Tests"
+    , trigger = ["push", "pull_request"]
+    , jobs = [
+        { id = "test"
+        , name = "Test with elm-test"
+        , runsOn = "ubuntu-latest"
+        , steps = [ { name = "Test"
+                    , uses = ""
+                    , run = "npx elm-test"
+                    }
+                  , { name = "Verify examples"
+                    , uses = ""
+                    , run = "npm elm-verify-examples --run-tests"
+                    }
+                  ]
+        }
+        ]
+    }
+
+-- A function to do the encoding / conversion
+outputGHAction : String
+outputGHAction =
+    encodeGHA myAction
+        |> document
+        |> toString 2
+
+```
+
+This will result in the YAML String:
+```yaml
+---
+name: Tests
+on:
+  - push
+  - pull_request
+jobs:
+  test:
+    name: Test with elm-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test
+        uses:
+        run: npx elm-test
+      - name: Verify examples
+        uses:
+        run: npx elm-verify-examples --run-tests
+...
 ```
 
 ## Development
@@ -108,7 +212,6 @@ and [elm-verify-examples](https://github.com/stoeffel/elm-verify-examples).
 
 ## Major Missing Features
 
-- `Yaml.Encode` to encode Elm values into YAML. [#12](https://github.com/MaybeJustJames/yaml/issues/12)
 - Testing against the official [YAML test suite](https://github.com/yaml/yaml-test-suite). [#7](https://github.com/MaybeJustJames/yaml/issues/7)
 
 ## Copying
