@@ -127,7 +127,7 @@ suite =
                             )
                         )
             ]
-        , Test.describe "Records"
+        , Test.describe "Dicts"
             [ Test.fuzz int "singleton inline record of ints" <|
                 \x ->
                     Expect.equal
@@ -137,7 +137,7 @@ suite =
                         )
                         (Encode.toString
                             0
-                            (Encode.record identity
+                            (Encode.dict identity
                                 Encode.int
                                 (Dict.singleton "x" x)
                             )
@@ -151,7 +151,7 @@ suite =
                         )
                         (Encode.toString
                             0
-                            (Encode.record identity
+                            (Encode.dict identity
                                 Encode.float
                                 (Dict.singleton "x" x)
                             )
@@ -163,7 +163,7 @@ suite =
                             "aaa: aaa\nbbb: bbb"
 
                         encoder =
-                            Encode.record identity Encode.string
+                            Encode.dict identity Encode.string
                     in
                     Expect.equal expected
                         (Encode.toString 2
@@ -179,7 +179,7 @@ suite =
                             "aaa: 0\nbbb: 1.1\nccc: -3.1415"
 
                         encoder =
-                            Encode.record identity Encode.float
+                            Encode.dict identity Encode.float
                     in
                     Expect.equal expected
                         (Encode.toString 2
@@ -196,7 +196,7 @@ suite =
                     in
                     Expect.equal expected
                         (Encode.toString 2
-                            (Encode.record identity Encode.bool <|
+                            (Encode.dict identity Encode.bool <|
                                 Dict.fromList
                                     [ ( "aaa", True )
                                     , ( "bbb", True )
@@ -211,8 +211,8 @@ suite =
                             "a a a:\n    bbb: 1\nc c c:\n    ddd: 0.1"
 
                         encoder =
-                            Encode.record identity <|
-                                Encode.record identity Encode.float
+                            Encode.dict identity <|
+                                Encode.dict identity Encode.float
                     in
                     Expect.equal expected
                         (Encode.toString 4
@@ -230,8 +230,8 @@ suite =
                             "a a a:\n    bbb: 1\n    ccc: 3.14\nc c c:\n    ddd: 0.1"
 
                         encoder =
-                            Encode.record identity <|
-                                Encode.record identity Encode.float
+                            Encode.dict identity <|
+                                Encode.dict identity Encode.float
                     in
                     Expect.equal expected
                         (Encode.toString 4

@@ -2,7 +2,7 @@ module Yaml.Encode exposing
     ( Encoder
     , toString
     , string, int, float, bool
-    , list, record
+    , list, record, dict
     )
 
 {-| Turn Elm values into [YAML](https://yaml.org). The library is structured in a similar way
@@ -12,7 +12,7 @@ to `Json.Encode`.
 ## Table of Contents
 
   - **Primitives**: [int](#int), [string](#string), [bool](#bool), [float](#float)
-  - **Data Structures**: [list](#list), [record](#record)
+  - **Data Structures**: [list](#list), [record](#record), [dict](#dict)
 
 @docs Encoder
 
@@ -29,7 +29,7 @@ to `Json.Encode`.
 
 # Data Structures
 
-@docs list, record
+@docs list, record, dict
 
 -}
 
@@ -58,7 +58,7 @@ initState indent =
 
 {-| A value that knows how to encode Elm values into YAML.
 -}
-type Encoder a
+type Encoder
     = Encoder (EncoderState -> String)
 
 
@@ -76,9 +76,15 @@ resulting string.
     toString 0 (list int [ 1, 2, 3 ]) --> "[1,2,3]"
 
 -}
-toString : Int -> Encoder a -> String
+toString : Int -> Encoder -> String
 toString indent =
-    internalConvertToString <| initState indent
+    initState indent
+        |> internalConvertToString
+
+
+internalConvertToString : EncoderState -> Encoder -> String
+internalConvertToString state (Encoder encoder) =
+    encoder state
 
 
 
@@ -92,7 +98,7 @@ toString indent =
     toString 0 (string "hello") --> "hello"
 
 -}
-string : String -> Encoder String
+string : String -> Encoder
 string s =
     Encoder
         (\state ->
@@ -113,7 +119,7 @@ string s =
     toString 0 (int 0) --> "0"
 
 -}
-int : Int -> Encoder Int
+int : Int -> Encoder
 int i =
     Encoder
         (\state ->
@@ -148,7 +154,7 @@ int i =
     toString 0 (float -infinity) --> "-.inf"
 
 -}
-float : Float -> Encoder Float
+float : Float -> Encoder
 float f =
     Encoder
         (\state ->
@@ -185,7 +191,7 @@ float f =
     toString 0 (bool False) --> "false"
 
 -}
-bool : Bool -> Encoder Bool
+bool : Bool -> Encoder
 bool b =
     Encoder
         (\state ->
@@ -214,7 +220,7 @@ bool b =
     --> "- a\n- b"
 
 -}
-list : (a -> Encoder a) -> List a -> Encoder (List a)
+list : (a -> Encoder) -> List a -> Encoder
 list encode l =
     Encoder
         (\state ->
@@ -227,7 +233,7 @@ list encode l =
         )
 
 
-encodeInlineList : (a -> Encoder a) -> List a -> String
+encodeInlineList : (a -> Encoder) -> List a -> String
 encodeInlineList encode l =
     "["
         ++ (List.map (encode >> toString 0) l
@@ -236,7 +242,7 @@ encodeInlineList encode l =
         ++ "]"
 
 
-encodeList : (a -> Encoder a) -> EncoderState -> List a -> String
+encodeList : (a -> Encoder) -> EncoderState -> List a -> String
 encodeList encode state l =
     let
         listElement : a -> String
@@ -263,27 +269,27 @@ encodeList encode state l =
     import Dict
 
 
-    toString 0 (record identity int (Dict.singleton "Sue" 38)) --> "{Sue: 38}"
+    toString 0 (dict identity int (Dict.singleton "Sue" 38)) --> "{Sue: 38}"
 
-    toString 2 (record identity string (Dict.fromList [("hello", "foo"), ("world", "bar")]))
+    toString 2 (dict identity string (Dict.fromList [("hello", "foo"), ("world", "bar")]))
     --> "hello: foo\nworld: bar"
 
 -}
-record : (k -> String) -> (v -> Encoder v) -> Dict k v -> Encoder (Dict k v)
-record key value r =
+dict : (k -> String) -> (v -> Encoder) -> Dict k v -> Encoder
+dict key value r =
     Encoder
         (\state ->
             case state.indent of
                 0 ->
-                    encodeInlineRecord key value r
+                    encodeInlineDict key value r
 
                 _ ->
-                    encodeRecord key value state r
+                    encodeDict key value state r
         )
 
 
-encodeInlineRecord : (k -> String) -> (v -> Encoder v) -> Dict k v -> String
-encodeInlineRecord key value r =
+encodeInlineDict : (k -> String) -> (v -> Encoder) -> Dict k v -> String
+encodeInlineDict key value r =
     let
         stringify : Dict k v -> List String
         stringify d =
@@ -297,8 +303,8 @@ encodeInlineRecord key value r =
         ++ "}"
 
 
-encodeRecord : (k -> String) -> (v -> Encoder v) -> EncoderState -> Dict k v -> String
-encodeRecord key value state r =
+encodeDict : (k -> String) -> (v -> Encoder) -> EncoderState -> Dict k v -> String
+encodeDict key value state r =
     let
         recordElement : ( k, v ) -> String
         recordElement ( key_, value_ ) =
@@ -327,6 +333,44 @@ encodeRecord key value state r =
         |> String.append (indentAfter prefix)
 
 
-internalConvertToString : EncoderState -> Encoder a -> String
-internalConvertToString state (Encoder encoder) =
-    encoder state
+{-| Encode a YAML record.
+
+    toString 0 (record [ ( "name", string "Sally" )
+                       , ( "height", int 187)
+                       ]
+               )
+    -- "{name: Sally,height:187}"
+
+    toString 2 (record [ ( "foo", int 42 )
+                       , ( "bar", float 3.14 )
+                       ]
+               )
+    --> "foo: 42\nbar: 3.14"
+
+-}
+record : List ( String, Encoder ) -> Encoder
+record r =
+    Encoder
+        (\state ->
+            case state.indent of
+                0 ->
+                    encodeInlineRecord r
+
+                _ ->
+                    encodeInlineRecord r
+         -- encodeRecord state r
+        )
+
+
+encodeInlineRecord : List ( String, Encoder ) -> String
+encodeInlineRecord r =
+    let
+        stringify : List ( String, Encoder ) -> List String
+        stringify vals =
+            List.map
+                (\pair ->
+                    Tuple.first pair ++ ": " ++ (Tuple.second >> toString 0) pair
+                )
+                vals
+    in
+    "{" ++ (stringify r |> String.join ",") ++ "}"
