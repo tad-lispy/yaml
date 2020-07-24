@@ -1,5 +1,5 @@
 module Yaml.Encode exposing
-    ( Encoder
+    ( Value
     , toString
     , string, int, float, bool
     , list, record, dict
@@ -14,7 +14,7 @@ to `Json.Encode`.
   - **Primitives**: [int](#int), [string](#string), [bool](#bool), [float](#float)
   - **Data Structures**: [list](#list), [record](#record), [dict](#dict)
 
-@docs Encoder
+@docs Value
 
 
 # Run Encoders
@@ -34,7 +34,6 @@ to `Json.Encode`.
 -}
 
 import Dict exposing (Dict)
-import Yaml.Parser.Ast exposing (Value(..))
 
 
 {-| Keep track of Encoder state while encoding
@@ -58,8 +57,8 @@ initState indent =
 
 {-| A value that knows how to encode Elm values into YAML.
 -}
-type Encoder
-    = Encoder (EncoderState -> String)
+type Value
+    = Value (EncoderState -> String)
 
 
 
@@ -76,15 +75,15 @@ resulting string.
     toString 0 (list int [ 1, 2, 3 ]) --> "[1,2,3]"
 
 -}
-toString : Int -> Encoder -> String
+toString : Int -> Value -> String
 toString indent =
     initState indent
         |> internalConvertToString
 
 
-internalConvertToString : EncoderState -> Encoder -> String
-internalConvertToString state (Encoder encoder) =
-    encoder state
+internalConvertToString : EncoderState -> Value -> String
+internalConvertToString state (Value encoderFn) =
+    encoderFn state
 
 
 
@@ -98,9 +97,9 @@ internalConvertToString state (Encoder encoder) =
     toString 0 (string "hello") --> "hello"
 
 -}
-string : String -> Encoder
+string : String -> Value
 string s =
-    Encoder
+    Value
         (\state ->
             if state.prefix then
                 " " ++ s
@@ -119,9 +118,9 @@ string s =
     toString 0 (int 0) --> "0"
 
 -}
-int : Int -> Encoder
+int : Int -> Value
 int i =
-    Encoder
+    Value
         (\state ->
             let
                 rep =
@@ -154,9 +153,9 @@ int i =
     toString 0 (float -infinity) --> "-.inf"
 
 -}
-float : Float -> Encoder
+float : Float -> Value
 float f =
-    Encoder
+    Value
         (\state ->
             let
                 prefix =
@@ -191,9 +190,9 @@ float f =
     toString 0 (bool False) --> "false"
 
 -}
-bool : Bool -> Encoder
+bool : Bool -> Value
 bool b =
-    Encoder
+    Value
         (\state ->
             let
                 prefix =
@@ -220,9 +219,9 @@ bool b =
     --> "- a\n- b"
 
 -}
-list : (a -> Encoder) -> List a -> Encoder
+list : (a -> Value) -> List a -> Value
 list encode l =
-    Encoder
+    Value
         (\state ->
             case state.indent of
                 0 ->
@@ -233,7 +232,7 @@ list encode l =
         )
 
 
-encodeInlineList : (a -> Encoder) -> List a -> String
+encodeInlineList : (a -> Value) -> List a -> String
 encodeInlineList encode l =
     "["
         ++ (List.map (encode >> toString 0) l
@@ -242,26 +241,33 @@ encodeInlineList encode l =
         ++ "]"
 
 
-encodeList : (a -> Encoder) -> EncoderState -> List a -> String
+encodeList : (a -> Value) -> EncoderState -> List a -> String
 encodeList encode state l =
     let
         listElement : a -> String
         listElement val =
-            "- "
+            "-"
                 ++ (internalConvertToString
-                        { state | col = state.col + state.indent }
+                        { state | col = state.col + state.indent, prefix = True }
                         << encode
                    )
                     val
 
-        encoded =
-            String.join ("\n" ++ String.repeat state.col " ") <| List.map listElement l
-    in
-    if state.col == 0 then
-        encoded
+        prefix : String
+        prefix =
+            if state.prefix then
+                "\n"
 
-    else
-        String.repeat (state.indent - 2) " " ++ encoded
+            else
+                ""
+
+        indentAfter : String -> String
+        indentAfter s =
+            s ++ String.repeat state.col " "
+    in
+    List.map listElement l
+        |> String.join (indentAfter "\n")
+        |> String.append (indentAfter prefix)
 
 
 {-| Encode a `Dict` into a YAML record.
@@ -275,9 +281,9 @@ encodeList encode state l =
     --> "hello: foo\nworld: bar"
 
 -}
-dict : (k -> String) -> (v -> Encoder) -> Dict k v -> Encoder
+dict : (k -> String) -> (v -> Value) -> Dict k v -> Value
 dict key value r =
-    Encoder
+    Value
         (\state ->
             case state.indent of
                 0 ->
@@ -288,7 +294,7 @@ dict key value r =
         )
 
 
-encodeInlineDict : (k -> String) -> (v -> Encoder) -> Dict k v -> String
+encodeInlineDict : (k -> String) -> (v -> Value) -> Dict k v -> String
 encodeInlineDict key value r =
     let
         stringify : Dict k v -> List String
@@ -303,7 +309,7 @@ encodeInlineDict key value r =
         ++ "}"
 
 
-encodeDict : (k -> String) -> (v -> Encoder) -> EncoderState -> Dict k v -> String
+encodeDict : (k -> String) -> (v -> Value) -> EncoderState -> Dict k v -> String
 encodeDict key value state r =
     let
         recordElement : ( k, v ) -> String
@@ -348,24 +354,23 @@ encodeDict key value state r =
     --> "foo: 42\nbar: 3.14"
 
 -}
-record : List ( String, Encoder ) -> Encoder
+record : List ( String, Value ) -> Value
 record r =
-    Encoder
+    Value
         (\state ->
             case state.indent of
                 0 ->
                     encodeInlineRecord r
 
                 _ ->
-                    encodeInlineRecord r
-         -- encodeRecord state r
+                    encodeRecord state r
         )
 
 
-encodeInlineRecord : List ( String, Encoder ) -> String
+encodeInlineRecord : List ( String, Value ) -> String
 encodeInlineRecord r =
     let
-        stringify : List ( String, Encoder ) -> List String
+        stringify : List ( String, Value ) -> List String
         stringify vals =
             List.map
                 (\pair ->
@@ -374,3 +379,32 @@ encodeInlineRecord r =
                 vals
     in
     "{" ++ (stringify r |> String.join ",") ++ "}"
+
+
+encodeRecord : EncoderState -> List ( String, Value ) -> String
+encodeRecord state r =
+    let
+        recordElement : ( String, Value ) -> String
+        recordElement ( key, value ) =
+            let
+                newState =
+                    { state | prefix = True, col = state.col + state.indent }
+            in
+            key ++ ":" ++ internalConvertToString newState value
+
+        prefix : String
+        prefix =
+            if state.prefix then
+                "\n"
+
+            else
+                ""
+
+        indentAfter : String -> String
+        indentAfter s =
+            s ++ String.repeat state.col " "
+    in
+    r
+        |> List.map recordElement
+        |> String.join (indentAfter "\n")
+        |> String.append (indentAfter prefix)

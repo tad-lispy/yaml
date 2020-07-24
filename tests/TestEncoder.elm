@@ -70,7 +70,7 @@ suite =
                 \_ ->
                     let
                         expected =
-                            "- - 1\n  - 2\n- - 3\n  - 4\n- - 5\n  - 6"
+                            "-\n  - 1\n  - 2\n-\n  - 3\n  - 4\n-\n  - 5\n  - 6"
 
                         encoder =
                             Encode.list (Encode.list Encode.int)
@@ -85,7 +85,7 @@ suite =
                 \_ ->
                     let
                         expected =
-                            "-    - 1\n     - 2\n-    - 3\n     - 4\n-    - 5\n     - 6"
+                            "-\n     - 1\n     - 2\n-\n     - 3\n     - 4\n-\n     - 5\n     - 6"
 
                         encoder =
                             Encode.list (Encode.list Encode.int)
@@ -100,7 +100,7 @@ suite =
                 \_ ->
                     let
                         expected =
-                            "-  - 1\n   - 2\n-  - 3\n   - 4\n-  - 5\n   - 6"
+                            "-\n   - 1\n   - 2\n-\n   - 3\n   - 4\n-\n   - 5\n   - 6"
 
                         encoder =
                             Encode.list (Encode.list Encode.int)
@@ -115,7 +115,7 @@ suite =
                 \_ ->
                     let
                         expected =
-                            "-  -  - 1\n      - 2\n-  -  - 3\n      - 4"
+                            "-\n   -\n      - 1\n      - 2\n-\n   -\n      - 3\n      - 4"
 
                         encoder =
                             Encode.list <| Encode.list <| Encode.list Encode.int
@@ -242,5 +242,26 @@ suite =
                                     ]
                             )
                         )
+            , Test.test "record of list of strings" <|
+                \_ ->
+                    let
+                        expected =
+                            "aaa:\n  - abc\n  - def\nzzz:\n  - ghi\n  - jkl"
+
+                        encoder =
+                            Encode.dict identity <|
+                                Encode.list Encode.string
+                    in
+                    Expect.equal expected
+                        (Encode.toString 2
+                            (encoder <|
+                                Dict.fromList
+                                    [ ( "aaa", [ "abc", "def" ] )
+                                    , ( "zzz", [ "ghi", "jkl" ] )
+                                    ]
+                            )
+                        )
             ]
+        , Test.describe "Records"
+            []
         ]
