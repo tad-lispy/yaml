@@ -217,4 +217,4 @@ and [elm-verify-examples](https://github.com/stoeffel/elm-verify-examples).
 
 ## Copying
 
-You are free to copy, modify, and distribute this package with attribution under the terms of the MIT license. See the [LICENSE](LICENSE) file for details.
+You are free to copy, modify, and distribute this package with attribution under the terms of the BSD-3-Clause license. See the [LICENSE](LICENSE) file for details.
