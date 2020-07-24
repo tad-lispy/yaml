@@ -2,7 +2,7 @@ module TestEncoder exposing (suite)
 
 import Dict
 import Expect
-import Fuzz exposing (bool, float, int, list)
+import Fuzz exposing (bool, float, int, list, map2, string)
 import Test
 import Yaml.Encode as Encode
 
@@ -263,5 +263,82 @@ suite =
                         )
             ]
         , Test.describe "Records"
-            []
+            [ Test.fuzz int "singleton inline record of int" <|
+                \x ->
+                    Expect.equal
+                        ("{x: "
+                            ++ String.fromInt x
+                            ++ "}"
+                        )
+                        (Encode.toString
+                            0
+                            (Encode.record [ ( "x", Encode.int x ) ])
+                        )
+            , Test.fuzz bool "singleton inline record of bool" <|
+                \x ->
+                    let
+                        boolToString : Bool -> String
+                        boolToString b =
+                            case b of
+                                True ->
+                                    "true"
+
+                                False ->
+                                    "false"
+                    in
+                    Expect.equal
+                        ("{x: "
+                            ++ boolToString x
+                            ++ "}"
+                        )
+                        (Encode.toString
+                            0
+                            (Encode.record [ ( "x", Encode.bool x ) ])
+                        )
+            , Test.fuzz string "singleton record of strings" <|
+                \s ->
+                    let
+                        quotedS =
+                            "'" ++ s ++ "'"
+
+                        expected =
+                            "x: " ++ quotedS
+
+                        encoder =
+                            Encode.record [ ( "x", Encode.string quotedS ) ]
+                    in
+                    Expect.equal expected
+                        (Encode.toString 2 encoder)
+            , Test.fuzz (list <| map2 Tuple.pair string float) "records of floats" <|
+                \pairs ->
+                    let
+                        quote : String -> String
+                        quote s =
+                            "'" ++ s ++ "'"
+
+                        expected =
+                            pairs
+                                |> List.map
+                                    (\( key, val ) ->
+                                        quote key ++ ": " ++ String.fromFloat val
+                                    )
+                                |> String.join "\n"
+
+                        encoder =
+                            Encode.record <|
+                                List.map
+                                    (\( key, val ) ->
+                                        ( quote key, Encode.float val )
+                                    )
+                                    pairs
+                    in
+                    Expect.equal expected
+                        (Encode.toString 2 encoder)
+            ]
+        , Test.describe "A Document"
+            [ Test.test "A document containing an int" <|
+                \_ ->
+                    Expect.equal "---\n5\n..."
+                        (Encode.toString 0 (Encode.document <| Encode.int 5))
+            ]
         ]

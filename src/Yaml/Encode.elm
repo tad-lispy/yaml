@@ -3,6 +3,7 @@ module Yaml.Encode exposing
     , toString
     , string, int, float, bool
     , list, record, dict
+    , document
     )
 
 {-| Turn Elm values into [YAML](https://yaml.org). The library is structured in a similar way
@@ -13,6 +14,7 @@ to `Json.Encode`.
 
   - **Primitives**: [int](#int), [string](#string), [bool](#bool), [float](#float)
   - **Data Structures**: [list](#list), [record](#record), [dict](#dict)
+  - **YAML specifics**: [document](#document)
 
 @docs Value
 
@@ -30,6 +32,11 @@ to `Json.Encode`.
 # Data Structures
 
 @docs list, record, dict
+
+
+# YAML specific details
+
+@docs document
 
 -}
 
@@ -73,6 +80,15 @@ resulting string.
     toString 0 (int 4) --> "4"
 
     toString 0 (list int [ 1, 2, 3 ]) --> "[1,2,3]"
+
+    toString 2 (list int [ 1, 2, 3 ])
+    --> "- 1\n- 2\n- 3"
+
+You can also embed your encoded values into a YAML document:
+
+    toString 2 (document
+                  <| record [ ( "hello", string "world" ) ])
+    --> "---\nhello: world\n..."
 
 -}
 toString : Int -> Value -> String
@@ -408,3 +424,26 @@ encodeRecord state r =
         |> List.map recordElement
         |> String.join (indentAfter "\n")
         |> String.append (indentAfter prefix)
+
+
+{-| Encode a YAML document
+
+YAML "documents" are demarked by "---" at the beginning and
+"..." at the end. This encoder places a value into a
+demarkated YAML document.
+
+    toString 0 (document <| string "hello")
+    --> "---\nhello\n..."
+
+    toString 2 (Encode.doc <| record [ ("hello", int 5), ("foo", int 3) ])
+    -- "---\nhello: 5\nfoo: 3\n..."
+
+-}
+document : Value -> Value
+document val =
+    Value
+        (\state ->
+            "---\n"
+                ++ internalConvertToString state val
+                ++ "\n..."
+        )
