@@ -288,6 +288,9 @@ list decoder =
                 Ast.List_ list_ ->
                     singleResult (List.map (fromValue decoder) list_)
 
+                Ast.Null_ ->
+                    Ok []
+
                 _ ->
                     Err (Decoding "Expected list")
 
