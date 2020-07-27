@@ -118,9 +118,21 @@ internalConvertToString state (Value encoderFn) =
 -}
 string : String -> Value
 string s =
+    let
+        quoted =
+            [ "\""
+            , String.replace "\"" "\\\"" s
+            , "\""
+            ]
+                |> String.join ""
+    in
     Value
         (\state ->
-            prefixed " " state s
+            if String.contains ":" s || String.contains "#" s then
+                prefixed " " state quoted
+
+            else
+                prefixed " " state s
         )
 
 
